@@ -1,0 +1,24 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: iperf-server
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: iperf-server
+    spec:
+      # optional - deploy on preferred node
+      nodeSelector:
+        kubernetes.io/hostname: net-arm-thunderx2-04
+      containers:
+      - image: iecedge/iperf-arm64:latest
+        imagePullPolicy: IfNotPresent
+        name: iperf-server
+        ports:
+        - containerPort: 5201
+        command: ["iperf"]
+        args: ["-V4d", "-s"]
+#        securityContext:
+#          privileged: true

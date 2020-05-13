@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox-master
+  namespace: default
+spec:
+  containers:
+  - image: arm64v8/busybox
+    command:
+      - sleep
+      - "3600"
+    imagePullPolicy: IfNotPresent
+  name: busybox-master
+  nodeSelector:
+      kubernetes.io/hostname: net-arm-thunderx-01
+  restartPolicy: Always
