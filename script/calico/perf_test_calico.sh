@@ -101,7 +101,7 @@ test_perf(){
   # iperf -c ${SERVER_IP} -t ${time} -i 1 -w 100K -P 4
   # -l packet length: default is 8k
   PERF_CMD="iperf -c ${SERVER_IP} -t ${time} -i 1 -w 100K -P 4"
-  kubectl exec -it ${CLIENT_POD} -- ${PERF_CMD} >> ./iperf_result/${HOST_TYPE}_${type}_${ipip_mode}_${mtu}.txt
+  kubectl exec -it ${CLIENT_POD} -- ${PERF_CMD} >> ./test_results/${HOST_TYPE}_${type}_${ipip_mode}_${mtu}.txt
 
 }
 
@@ -114,7 +114,7 @@ test_node2pod(){
   sleep 10
   SERVER_IP=$(kubectl get pods -o wide| grep iperf-server |cut -f25 -d' ')
 
-  iperf -c ${SERVER_IP} -t ${time} -i 1 -w 100K -P 4 >> ./iperf_result/${HOST_TYPE}_${type}_${ipip_mode}_${mtu}.txt
+  iperf -c ${SERVER_IP} -t ${time} -i 1 -w 100K -P 4 >> ./test_results/${HOST_TYPE}_${type}_${ipip_mode}_${mtu}.txt
   # -l packet length: default is 8k
 
 }
@@ -191,10 +191,10 @@ do
   WRK_TEST_CMD="/usr/bin/wrk -t12 -c1000 -d30s http://${NGINX_POD_IP1}/files/${file}"
   echo $WRK_TEST_CMD
   TEST_TYPE="host2pod"
-  file="./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt"
+  file="./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt"
   echo "Write to file:"$file
-  echo $WRK_TEST_CMD >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
-  sshpass -p ${HOST_USER_PWD} ssh -o StrictHostKeyChecking=no ${HOST_USER}@${HTTP_CLIENT_HOSTNAME} ${WRK_TEST_CMD} >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  echo $WRK_TEST_CMD >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  sshpass -p ${HOST_USER_PWD} ssh -o StrictHostKeyChecking=no ${HOST_USER}@${HTTP_CLIENT_HOSTNAME} ${WRK_TEST_CMD} >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
   sleep 3
 done
 
@@ -205,9 +205,9 @@ do
   WRK_TEST_CMD="wrk -t12 -c1000 -d30s http://${NGINX_POD_IP1}/files/${file}"
   echo $WRK_TEST_CMD
   TEST_TYPE="pod2pod"
-  file="./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt"
+  file="./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt"
   echo $WRK_TEST_CMD >> $file
-  kubectl exec -it ${WRK_POD} -- ${WRK_TEST_CMD} >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  kubectl exec -it ${WRK_POD} -- ${WRK_TEST_CMD} >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
   sleep 3
 done
 
@@ -219,8 +219,8 @@ do
   WRK_TEST_CMD="wrk -t12 -c1000 -d30s http://${HTTP_SERVER_ACCESSIP}:${svcNodePort}/files/${file}"
   echo $WRK_TEST_CMD
   TEST_TYPE="pod2nodeIPnodePort"
-  echo $WRK_TEST_CMD >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
-  kubectl exec -it ${WRK_POD} -- ${WRK_TEST_CMD} >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  echo $WRK_TEST_CMD >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  kubectl exec -it ${WRK_POD} -- ${WRK_TEST_CMD} >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
   sleep 3
 done
 
@@ -230,8 +230,8 @@ do
   WRK_TEST_CMD="wrk -t12 -c1000 -d30s http://${HTTP_SERVER_ACCESSIP}:${svcNodePort}/files/${file}"
   echo $WRK_TEST_CMD
   TEST_TYPE="host2nodeIPnodePort"
-  echo $WRK_TEST_CMD >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
-  sshpass -p ${HOST_USER_PWD} ssh -o StrictHostKeyChecking=no ${HOST_USER}@${HTTP_CLIENT_HOSTNAME} ${WRK_TEST_CMD} >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  echo $WRK_TEST_CMD >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  sshpass -p ${HOST_USER_PWD} ssh -o StrictHostKeyChecking=no ${HOST_USER}@${HTTP_CLIENT_HOSTNAME} ${WRK_TEST_CMD} >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
   sleep 3
 done
 
@@ -242,8 +242,8 @@ do
   WRK_TEST_CMD="wrk -t12 -c1000 -d30s http://${svcIP}/files/${file}"
   echo $WRK_TEST_CMD
   TEST_TYPE="host2svc"
-  echo $WRK_TEST_CMD >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
-  sshpass -p ${HOST_USER_PWD} ssh -o StrictHostKeyChecking=no ${HOST_USER}@${HTTP_CLIENT_HOSTNAME} ${WRK_TEST_CMD} >> ./test_result/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  echo $WRK_TEST_CMD >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
+  sshpass -p ${HOST_USER_PWD} ssh -o StrictHostKeyChecking=no ${HOST_USER}@${HTTP_CLIENT_HOSTNAME} ${WRK_TEST_CMD} >> ./test_results/wrk_${TEST_TYPE}_${use_ipip}_${MTU}.txt
   sleep 3
 done
 
@@ -260,15 +260,13 @@ do
   WRK_TEST_CMD="wrk -t12 -c1000 -d30s http://${HTTP_SERVER_ACCESSIP}/files/${file}"
   echo $WRK_TEST_CMD
   TEST_TYPE="node2node"
-  echo ${WRK_TEST_CMD} >> ./test_result/wrk_${TEST_TYPE}_baremetal_nicmtu${nic_mtu_size}.txt
+  echo ${WRK_TEST_CMD} >> ./test_results/wrk_${TEST_TYPE}_baremetal_nicmtu${nic_mtu_size}.txt
   echo ""
-  sshpass -p ${HOST_USER_PWD} ssh -o StrictHostKeyChecking=no ${HOST_USER}@${HTTP_CLIENT_HOSTNAME} ${WRK_TEST_CMD} >> ./test_result/wrk_${TEST_TYPE}_baremetal_nicmtu${nic_mtu_size}.txt
+  sshpass -p ${HOST_USER_PWD} ssh -o StrictHostKeyChecking=no ${HOST_USER}@${HTTP_CLIENT_HOSTNAME} ${WRK_TEST_CMD} >> ./test_results/wrk_${TEST_TYPE}_baremetal_nicmtu${nic_mtu_size}.txt
   sleep 3
 done
 }
 
-mkdir -p ./test_result
-mkdir -p ./iperf_result
 
 #test_http_baremetal
 
