@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wrk-tx2-02
+  namespace: default
+spec:
+  containers:
+  - image: iecedge/wrk:latest
+    command:
+      - sleep
+      - "36000"
+    imagePullPolicy: IfNotPresent
+    name: wrk-tx2-02
+  nodeSelector:
+      kubernetes.io/hostname: net-arm-thunderx2-02
+  restartPolicy: Always

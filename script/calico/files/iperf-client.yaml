@@ -1,0 +1,23 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: iperf-client
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: iperf-client
+        # ldpreload-related labels
+    spec:
+      # optional - deploy on preferred node
+      nodeSelector:
+        kubernetes.io/hostname: net-arm-thunderx2-02
+      containers:
+      - image: iecedge/iperf-arm64:latest
+        imagePullPolicy: IfNotPresent
+        name: client
+        command: ["bash"]
+        args: ["-c", "while true; do sleep 30; done;"]
+#        securityContext:
+#          privileged: true
