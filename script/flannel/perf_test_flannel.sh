@@ -18,13 +18,14 @@ HTTP_SERVER_HOSTNAME2_FQDN="net-arm-thunderx2-02.shanghai.arm.com"
 HTTP_SERVER_HOSTNAME2="net-arm-thunderx2-02"
 HTTP_CLIENT_HOSTNAME="net-arm-thunderx2-02.shanghai.arm.com"
 HTTP_CLIENT_MGMTIP="10.169.41.165"
-HOST_USER="trevor"
+
+HOST_USER="jingzhao"
 HOST_USER_PWD="arm"
 
 nic_mtu_size=$(ip link |grep enp12s0f1 | cut -f 5 -d' ')
 
 
-sudo ip link set dev enp12s0f1 up
+#sudo ip link set dev enp12s0f1 up
 
 function wait_for {
   # Execute in a subshell to prevent local variable override during recursion
@@ -45,25 +46,103 @@ function wait_for {
   )
 }
 
+# Checking the interface mtu size. If the size is not correct, return error
+#Input: $1 interface name
+#       $2 mtu size
+check_mtu(){
+  ETH=$1
+  SET_SIZE=$2
 
-restart_calico()
-{
-  # $1 -> Calico mtu(with/without ip-ip)
-  mtu_calico=$1
+  eth_size=$(ip link show $ETH |grep mtu |awk '{print $5}')
 
-  # Stop calico in K8s
-  kubectl delete -f ./files/calico.yaml || true
-  wait_for 30 'test $(kubectl get pods -n kube-system | grep calico -c ) -lt 1'
+  if [ ${eth_size} -ne ${SET_SIZE} ]; then
+    echo "$ETH size is not correct, real: ${eth_size}, setting ${SET_SIZE}"
+    exit 1
+  fi
+}
 
-  # Replace mtu & Start calico
-  sed -i "/^  veth_mtu:/c\ \ veth_mtu: \"${mtu_calico}\"" calico.yaml
-  kubectl apply -f calico.yaml
+check_remote_mtu(){
 
-  wait_for 50 'test $(kubectl get pods -n kube-system | grep calico |grep Running -c ) -eq 3'
+  ETH=$1
+  SET_SIZE=$2
+  HOST=$3
+
+  USER=$HOST_USER
+  PWD=$HOST_USER_PWD
+
+  COMMAND="ip link show $ETH |grep mtu |awk '{print \$5}'"
+  eth_size=$(sshpass -p $PWD ssh -o StrictHostKeyChecking=no $USER@$HOST ${COMMAND})
+
+  if [ ${eth_size} -ne ${SET_SIZE} ]; then
+    echo "$ETH of $3 size is not correct, real: ${eth_size}, setting ${SET_SIZE}"
+    exit 1
+  fi
+}
+
+config_eth_mtu(){
+  ETH=$1
+  MTU=$2
+
+  sudo ip link delete cni0
+  sudo ip link delete flannel.1
+  sudo ifconfig $1 mtu $2
+}
+
+config_remote_eth_mtu(){
+  ETH=$1
+  MTU=$2
+  HOST=$3
+
+  USER=$HOST_USER
+  PWD=$HOST_USER_PWD
+
+  sshpass -p $PWD ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo ip link delete cni0"
+  sshpass -p $PWD ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo ip link delete flannel.1"
+  sshpass -p $PWD ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo ifconfig $1 mtu $2"
+}
+
+check_configurations(){
+  MTU=$1
+  REMOTE=$HTTP_SERVER_HOSTNAME2
+
+  VXLAN_HEADER=50
+  let "vxlan_mtu=$MTU-$VXLAN_HEADER"
+
+  USER=$HOST_USER
+  PWD=$HOST_USER_PWD
+
+
+  If_perf=$(brctl show cni0| grep cni0 | awk '{print $4}')
+
+  COMMAND="brctl show cni0| grep cni0 | awk '{print \$4}'"
+  If_perf_remote=$(sshpass -p $PWD ssh -o StrictHostKeyChecking=no $USER@$REMOTE ${COMMAND})
+
+  #thunderx2-04
+  check_mtu cni0 $vxlan_mtu
+  check_mtu flannel.1 $vxlan_mtu
+  check_mtu ${If_perf} $vxlan_mtu
+  check_mtu enp12s0f1 $MTU
+
+  # thunderx2-02
+  check_remote_mtu cni0 $vxlan_mtu $REMOTE
+  check_remote_mtu flannel.1 $vxlan_mtu $REMOTE
+  check_remote_mtu ${If_perf_remote} $vxlan_mtu $REMOTE
+  check_remote_mtu enp142s0f1 $MTU $REMOTE
 }
 
 restart_flannel(){
-  
+  # $1 -> flannel mtu(with/without ip-ip)
+  mtu_flannel=$1
+
+  # Stop flannel in K8s
+  kubectl delete -f ./files/kube-flannel.yml || true
+  wait_for 30 'test $(kubectl get pods -n kube-system | grep flannel -c ) -lt 1'
+
+  # Replace mtu & Start flannel
+  kubectl apply -f ./files/kube-flannel.yml
+
+  wait_for 50 'test $(kubectl get pods -n kube-system | grep flannel |grep Running -c ) -eq 2'
+
 }
 
 restart_perf()
@@ -73,23 +152,17 @@ restart_perf()
   Server=$1
   Client=$2
   # Delete perf server & client
-  kubectl delete -f iperf-client.yaml
-  kubectl delete -f iperf-server.yaml
+  kubectl delete -f ./files/iperf-client.yaml
+  kubectl delete -f ./files/iperf-server.yaml
   wait_for 30 'test $(kubectl get pods | grep perf -c ) -lt 1'
 
   # Start perf server & client
-  sed -i "/^        kubernetes.io\/hostname/c\ \ \ \ \ \ \ \ kubernetes.io\/hostname: ${Client}" iperf-client.yaml
-  sed -i "/^        kubernetes.io\/hostname/c\ \ \ \ \ \ \ \ kubernetes.io\/hostname: ${Server}" iperf-server.yaml
-  kubectl apply -f iperf-server.yaml
-  kubectl apply -f iperf-client.yaml
+  sed -i "/^        kubernetes.io\/hostname/c\ \ \ \ \ \ \ \ kubernetes.io\/hostname: ${Client}" ./files/iperf-client.yaml
+  sed -i "/^        kubernetes.io\/hostname/c\ \ \ \ \ \ \ \ kubernetes.io\/hostname: ${Server}" ./files/iperf-server.yaml
+  kubectl apply -f ./files/iperf-server.yaml
+  kubectl apply -f ./files/iperf-client.yaml
   
   wait_for 50 'test $(kubectl get pods | grep iperf |grep Running -c ) -eq 2'
-}
-
-config_IPIP(){
-  IPIP=$1
-  sed -i "s/Always/$1/g" calico.yaml
-  sed -i "s/CrossSubnet/$1/g" calico.yaml
 }
 
 test_perf(){
@@ -150,16 +223,16 @@ test_wrk(){
   Server=$1
   Client=$2
   #Delete nginx server
-  kubectl delete -f nginx-app-files.yaml
+  kubectl delete -f nginx-app-files.yml
   #Delete wrk client
-  kubectl delete -f wrk-tx2-02.yaml
+  kubectl delete -f wrk-tx2-02.yml
   
   wait_for 30 'test $(kubectl get pods | grep wrk -c ) -lt 1'
 
   #Start Nginx server and svc
-  kubectl apply -f nginx-app-files.yaml
+  kubectl apply -f nginx-app-files.yml
   #Start wrk client on thunderx2-02
-  kubectl apply -f wrk-tx2-02.yaml
+  kubectl apply -f wrk-tx2-02.yml
   wait_for 50 'test $(kubectl get pods | grep nginx |grep Running -c ) -eq 2'
   wait_for 50 'test $(kubectl get pods | grep wrk |grep Running -c ) -eq 1'
 
@@ -274,56 +347,41 @@ done
 
 #test_http_baremetal
 
+config_mtu(){
+  MTU=$1
+  
+  #thunderx2-04
+  config_eth_mtu enp12s0f1 $MTU
+
+  #thunderx2-02
+  config_remote_eth_mtu enp142s0f1 $MTU "net-arm-thunderx2-02"
+}
 
 # Mtu size: 
 #          IPIP enable  1480 <--> 8980
 #          IPIP disable 1500 <--> 9000
 
-# IPIP mtu size: 1480 <--> 8980
-for MTU in "${MTU_SIZES[@]}"
-do
-  # IPIP setting
-  config_IPIP "Always"
-
-  use_ipip="ipip"
-
-  # Configure Calico
-  restart_calico ${MTU}
-
-  # Configure perf
-  restart_perf "net-arm-thunderx2-04" "net-arm-thunderx2-02"
-
-  echo "${HOST_TYPE} Crosshost Mtu: ${MTU} testing"
-  test_perf "crosshost" ${TEST_TIME} ${MTU} "IPIP"
-
-  test_wrk
-  
-  echo "${HOST_TYPE} node2pod Mtu: ${MTU} IPIP testing"
-  test_node2pod "node2pod" ${TEST_TIME} ${MTU} "IPIP"
-
-
-done
-
-# IPIP diabled mtu size: 1500 <--> 9000
+# IPIP mtu size: 1500 <--> 9000
 for MTU in "${MTU_WITHOUT_IPIP[@]}"
 do
-  # IPIP setting
-  config_IPIP "CrossSubnet"
+  config_mtu $MTU
 
-  use_ipip="noipip"
+  use_ipip="vxlan"
 
-  # Configure Calico
-  restart_calico ${MTU}
+  # Configure Flannel
+  restart_flannel ${MTU}
 
   # Configure perf
   restart_perf "net-arm-thunderx2-04" "net-arm-thunderx2-02"
 
-  echo "${HOST_TYPE} Crosshost Mtu: ${MTU} testing"
-  test_perf "crosshost" ${TEST_TIME} ${MTU} "noIPIP"
+  check_configurations ${MTU}
 
-  test_wrk
+  echo "${HOST_TYPE} Crosshost Mtu: ${MTU} testing"
+  test_perf "crosshost" ${TEST_TIME} ${MTU} "vxlan"
+
+  #test_wrk
   
-  echo "${HOST_TYPE} node2pod Mtu: ${MTU} noIPIP testing"
-  test_node2pod "node2pod" ${TEST_TIME} ${MTU} "noIPIP"
+  #echo "${HOST_TYPE} node2pod Mtu: ${MTU} vxlan testing"
+  #test_node2pod "node2pod" ${TEST_TIME} ${MTU} "vxlan"
 
 done

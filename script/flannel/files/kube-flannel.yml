@@ -124,7 +124,7 @@ data:
     }
   net-conf.json: |
     {
-      "Network": "10.244.0.0/16",
+      "Network": "192.168.0.0/16",
       "Backend": {
         "Type": "vxlan"
       }
@@ -252,6 +252,7 @@ spec:
           command:
             - /opt/bin/flanneld
           args:
+            - --iface-regex=192\.168\.26\.*
             - --ip-masq
             - --kube-subnet-mgr
           resources:
