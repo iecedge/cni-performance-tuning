@@ -103,10 +103,19 @@ config_remote_eth_mtu(){
 
 check_configurations(){
   MTU=$1
+  type=$2
+
   REMOTE=$HTTP_SERVER_HOSTNAME2
 
-  VXLAN_HEADER=50
-  let "vxlan_mtu=$MTU-$VXLAN_HEADER"
+  if [ $type == "ipip" ]; then
+    OVER_HEADER=20
+    FLANNEL_BRI="flannel.ipip"
+  elif [ $type == "vxlan" ]; then
+    OVER_HEADER=50
+    FLANNEL_BRI="flannel.1"
+  fi
+
+  let "bri_mtu=$MTU-$OVER_HEADER"
 
   USER=$HOST_USER
   PWD=$HOST_USER_PWD
@@ -118,16 +127,18 @@ check_configurations(){
   If_perf_remote=$(sshpass -p $PWD ssh -o StrictHostKeyChecking=no $USER@$REMOTE ${COMMAND})
 
   #thunderx2-04
-  check_mtu cni0 $vxlan_mtu
-  check_mtu flannel.1 $vxlan_mtu
-  check_mtu ${If_perf} $vxlan_mtu
+  check_mtu cni0 $bri_mtu
+  check_mtu ${FLANNEL_BRI} $bri_mtu
+  check_mtu ${If_perf} $bri_mtu
   check_mtu enp12s0f1 $MTU
 
+
   # thunderx2-02
-  check_remote_mtu cni0 $vxlan_mtu $REMOTE
-  check_remote_mtu flannel.1 $vxlan_mtu $REMOTE
-  check_remote_mtu ${If_perf_remote} $vxlan_mtu $REMOTE
+  check_remote_mtu cni0 $bri_mtu $REMOTE
+  check_remote_mtu ${FLANNEL_BRI} $bri_mtu $REMOTE
+  check_remote_mtu ${If_perf_remote} $bri_mtu $REMOTE
   check_remote_mtu enp142s0f1 $MTU $REMOTE
+
 }
 
 restart_flannel(){
@@ -144,6 +155,22 @@ restart_flannel(){
   wait_for 50 'test $(kubectl get pods -n kube-system | grep flannel |grep Running -c ) -eq 2'
 
 }
+
+restart_flannelipip(){
+  # $1 -> flannel mtu(with/without ip-ip)
+  mtu_flannel=$1
+
+  # Stop flannel in K8s
+  kubectl delete -f ./files/kube-flannelIPIP.yml || true
+  wait_for 30 'test $(kubectl get pods -n kube-system | grep flannel -c ) -lt 1'
+
+  # Replace mtu & Start flannel
+  kubectl apply -f ./files/kube-flannelIPIP.yml
+
+  wait_for 50 'test $(kubectl get pods -n kube-system | grep flannel |grep Running -c ) -eq 2'
+
+}
+
 
 restart_perf()
 {
@@ -361,7 +388,8 @@ config_mtu(){
 #          IPIP enable  1480 <--> 8980
 #          IPIP disable 1500 <--> 9000
 
-# IPIP mtu size: 1500 <--> 9000
+# vxlan mtu size: 1500 <--> 9000
+<< TEMPTCOMMENTS
 for MTU in "${MTU_WITHOUT_IPIP[@]}"
 do
   config_mtu $MTU
@@ -374,7 +402,32 @@ do
   # Configure perf
   restart_perf "net-arm-thunderx2-04" "net-arm-thunderx2-02"
 
-  check_configurations ${MTU}
+  check_configurations ${MTU} $use_ipip
+
+  echo "${HOST_TYPE} Crosshost Mtu: ${MTU} testing"
+  test_perf "crosshost" ${TEST_TIME} ${MTU} "vxlan"
+
+  #test_wrk
+  
+  #echo "${HOST_TYPE} node2pod Mtu: ${MTU} vxlan testing"
+  #test_node2pod "node2pod" ${TEST_TIME} ${MTU} "vxlan"
+
+done
+TEMPTCOMMENTS
+
+for MTU in "${MTU_WITHOUT_IPIP[@]}"
+do
+  config_mtu $MTU
+
+  use_ipip="ipip"
+
+  # Configure Flannel
+  restart_flannelipip ${MTU}
+
+  # Configure perf
+  restart_perf "net-arm-thunderx2-04" "net-arm-thunderx2-02"
+
+  check_configurations ${MTU} $use_ipip
 
   echo "${HOST_TYPE} Crosshost Mtu: ${MTU} testing"
   test_perf "crosshost" ${TEST_TIME} ${MTU} "vxlan"
