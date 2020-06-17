@@ -13,7 +13,7 @@ spec:
       nodeSelector:
         kubernetes.io/hostname: net-arm-thunderx2-04
       containers:
-      - image: iecedge/iperf-arm64:latest
+      - image: iecedge/iperf:latest
         imagePullPolicy: IfNotPresent
         name: iperf-server
         ports:
