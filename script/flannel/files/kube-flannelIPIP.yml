@@ -172,6 +172,7 @@ spec:
           command:
             - /opt/bin/flanneld
           args:
+            - --iface-regex=192\.168\.3\.*
             - --ip-masq
             - --kube-subnet-mgr
           resources:

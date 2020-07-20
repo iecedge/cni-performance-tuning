@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    protocol: TCP
+    name: http
+  selector:
+    app: nginx
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: nginx
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+        role: backend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        # mount /tmp as files to be accessed from /files/xxx
+        - mountPath: /usr/share/nginx/html/files
+          name: host-tmp-files
+          #nodeSelector:
+          #kubernetes.io/hostname: net-arm-thunderx2-04
+      volumes:
+      - name: host-tmp-files
+        hostPath:
+          path: /tmp

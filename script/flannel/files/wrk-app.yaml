@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wrk-app
+  namespace: default
+spec:
+  containers:
+  - image: iecedge/wrk:latest
+    command:
+      - sleep
+      - "36000"
+    imagePullPolicy: IfNotPresent
+    name: wrk-app
+  nodeSelector:
+        kubernetes.io/hostname: net-x86-dell-01
+  restartPolicy: Always
