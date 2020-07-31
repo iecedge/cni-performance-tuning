@@ -6,8 +6,7 @@ TEST_TIME=10
 
 #MTU_SIZES=(1480,5480,8980)
 MTU_SIZES=(1480 2000 3000 4000 5000 6000 7000 8000 8980)
-#MTU_WITHOUT_IPIP=(5000 6000 7000 8000 9000)
-MTU_WITHOUT_IPIP=(1500 2000)
+MTU_WITHOUT_IPIP=(1500 2000 3000 4000 5000 6000 7000 8000 9000)
 
 
 HOST_USER="jingzhao"
@@ -248,42 +247,45 @@ config_mtu(){
 
 # vxlan mtu size: 1500 <--> 9000
 # Test wrk
+FILE_SIZE=(10K 100K 1M 10M)
+
+echo "vxlan data"
 for MTU in "${MTU_WITHOUT_IPIP[@]}"
 do
   use_ipip="vxlan"
+  # pod to pod
+  for SIZE in "${FILE_SIZE[@]}"
+  do
+    cat test_results/wrk_pod2pod_${use_ipip}_${MTU}_${SIZE}.file.txt |grep Requests | cut -f3 -d' ' >> analysis/pod2pod_${use_ipip}_${MTU}_Request.txt
+	cat test_results/wrk_pod2pod_${use_ipip}_${MTU}_${SIZE}.file.txt |grep Transfer | cut -f7 -d' ' >> analysis/pod2pod_${use_ipip}_${MTU}_BW.txt
+  done
+  
+  # host to pod
+  for SIZE in "${FILE_SIZE[@]}"
+  do
+    cat test_results/wrk_host2pod_${use_ipip}_${MTU}_${SIZE}.file.txt |grep Requests | cut -f3 -d' ' >> analysis/host2pod_${use_ipip}_${MTU}_Request.txt
+	cat test_results/wrk_host2pod_${use_ipip}_${MTU}_${SIZE}.file.txt |grep Transfer | cut -f7 -d' ' >> analysis/host2pod_${use_ipip}_${MTU}_BW.txt
+  done
 
-  config_mtu $MTU $use_ipip "net-x86-supermicro-03"
-
-  # Configure Flannel
-  restart_flannel ${MTU}
-
-  #test_wrk
-  wrk_test_prepare "net-x86-dell-01"
-
-  check_configurations ${MTU} $use_ipip "net-x86-supermicro-03"
-
-  wrk_test_start $MTU $use_ipip "net-x86-supermicro-03"
-
-  #echo "${HOST_TYPE} node2pod Mtu: ${MTU} vxlan testing"
-  #test_node2pod "node2pod" ${TEST_TIME} ${MTU} "vxlan"
 done
 
+echo "ipip data"
 for MTU in "${MTU_WITHOUT_IPIP[@]}"
 do
   use_ipip="ipip"
 
-  config_mtu $MTU $use_ipip "net-x86-supermicro-03"
+  # pod to pod
+  for SIZE in "${FILE_SIZE[@]}"
+  do
+    cat test_results/wrk_pod2pod_${use_ipip}_${MTU}_${SIZE}.file.txt |grep Requests | cut -f3 -d' ' >> analysis/pod2pod_${use_ipip}_${MTU}_Request.txt
+	cat test_results/wrk_pod2pod_${use_ipip}_${MTU}_${SIZE}.file.txt |grep Transfer | cut -f7 -d' ' >> analysis/pod2pod_${use_ipip}_${MTU}_BW.txt
+  done
+  
+  # host to pod
+  for SIZE in "${FILE_SIZE[@]}"
+  do
+    cat test_results/wrk_host2pod_${use_ipip}_${MTU}_${SIZE}.file.txt |grep Requests | cut -f3 -d' ' >> analysis/host2pod_${use_ipip}_${MTU}_Request.txt
+	cat test_results/wrk_host2pod_${use_ipip}_${MTU}_${SIZE}.file.txt |grep Transfer | cut -f7 -d' ' >> analysis/host2pod_${use_ipip}_${MTU}_BW.txt
+  done
 
-  # Configure Flannel
-  restart_flannelipip ${MTU}
-
-  #test_wrk
-  wrk_test_prepare "net-x86-dell-01"
-
-  check_configurations ${MTU} $use_ipip "net-x86-supermicro-03"
-
-  wrk_test_start $MTU $use_ipip "net-x86-supermicro-03"
-
-  #echo "${HOST_TYPE} node2pod Mtu: ${MTU} vxlan testing"
-  #test_node2pod "node2pod" ${TEST_TIME} ${MTU} "vxlan"
 done
